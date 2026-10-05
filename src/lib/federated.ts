@@ -51,9 +51,11 @@ export async function verifyAuth0IdToken(
       audience,
     });
     if (!payload.sub || typeof payload.sub !== "string") {
+      console.error("[federated] id_token rejected (missing sub)");
       throw new AppError(401, "Invalid federated token", "Unauthorized");
     }
     if (payload.nonce !== expectedNonce) {
+      console.error("[federated] id_token rejected (nonce mismatch)");
       throw new AppError(401, "Invalid federated token", "Unauthorized");
     }
     return {
@@ -64,6 +66,11 @@ export async function verifyAuth0IdToken(
     };
   } catch (err) {
     if (err instanceof AppError) throw err;
+    const code =
+      err instanceof Error
+        ? ((err as { code?: string }).code ?? err.name)
+        : "unknown";
+    console.error(`[federated] id_token rejected (${code})`);
     throw new AppError(401, "Invalid federated token", "Unauthorized");
   }
 }
