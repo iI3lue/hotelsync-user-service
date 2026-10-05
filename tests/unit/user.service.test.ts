@@ -11,6 +11,7 @@ jest.mock("../../src/lib/prisma.js", () => ({
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    refreshSession: { updateMany: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
@@ -24,9 +25,12 @@ const HOTEL_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const superAdmin: AccessClaims = {
   sub: ADMIN_ID,
   email: "admin@hotelsync.local",
+  email_verified: true,
   role: "SUPER_ADMIN",
   hotel_id: null,
   scope: "global",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
   iat: 0,
   exp: 9999999999,
 };
@@ -34,9 +38,12 @@ const superAdmin: AccessClaims = {
 const manager: AccessClaims = {
   sub: "11111111-2222-4333-8444-555555555555",
   email: "manager@example.com",
+  email_verified: true,
   role: "MANAGER",
   hotel_id: HOTEL_ID,
   scope: "hotel",
+  iss: "hotelsync",
+  aud: "hotelsync-api",
   iat: 0,
   exp: 9999999999,
 };
@@ -125,6 +132,29 @@ describe("UserService", () => {
       ).rejects.toThrow(AppError);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
+
+    it("revokes sessions when disabling an account", async () => {
+      mockPrisma.user.update.mockResolvedValue({ status: "DISABLED" });
+
+      await userService.updateStaff(superAdmin, "some-user", {
+        status: "DISABLED",
+      });
+
+      expect(mockPrisma.refreshSession.updateMany).toHaveBeenCalledWith({
+        where: { user_id: "some-user", revoked_at: null },
+        data: expect.objectContaining({ revoked_at: expect.any(Date) }),
+      });
+    });
+
+    it("keeps sessions when the account stays active", async () => {
+      mockPrisma.user.update.mockResolvedValue({ status: "ACTIVE" });
+
+      await userService.updateStaff(superAdmin, "some-user", {
+        name: "New Name",
+      });
+
+      expect(mockPrisma.refreshSession.updateMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("hotel staff (manager scope)", () => {
@@ -198,6 +228,10 @@ describe("UserService", () => {
         data: { is_active: false },
       });
       expect(result.is_active).toBe(false);
+      expect(mockPrisma.refreshSession.updateMany).toHaveBeenCalledWith({
+        where: { user_id: "some-user", revoked_at: null },
+        data: expect.objectContaining({ revoked_at: expect.any(Date) }),
+      });
     });
   });
 });

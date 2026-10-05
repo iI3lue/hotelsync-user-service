@@ -15,6 +15,18 @@ function isSuperAdmin(actor: AccessClaims): boolean {
   return actor.role === "SUPER_ADMIN";
 }
 
+/**
+ * Revoca todas las sesiones activas de un usuario. Se usa al desactivar
+ * la cuenta o una asignación: el access token vive 15 minutos, así que
+ * sin esto el permiso retirado seguiría válido hasta su expiración.
+ */
+async function revokeUserSessions(userId: string): Promise<void> {
+  await prisma.refreshSession.updateMany({
+    where: { user_id: userId, revoked_at: null },
+    data: { revoked_at: new Date() },
+  });
+}
+
 function publicProfile(user: {
   user_id: string;
   email: string;
@@ -149,6 +161,9 @@ export class UserService {
       where: { assignment_id: assignment.assignment_id },
       data: { is_active: data.is_active },
     });
+    if (!data.is_active) {
+      await revokeUserSessions(userId);
+    }
     return updated;
   }
 
@@ -223,7 +238,14 @@ export class UserService {
         },
       },
       include: {
-        assignments: { where: { is_active: true } },
+        assignments: {
+          where: {
+            is_active: true,
+            // Un MANAGER solo ve las asignaciones de su propio hotel;
+            // SUPER_ADMIN ve todas las activas.
+            ...(hotelId && actor.role === "MANAGER" ? { hotel_id: hotelId } : {}),
+          },
+        },
       },
       orderBy: { created_at: "asc" },
     });
@@ -252,6 +274,9 @@ export class UserService {
     }).catch(() => {
       throw new AppError(404, `User with id ${id} not found`, "Not Found");
     });
+    if (data.status && data.status !== "ACTIVE") {
+      await revokeUserSessions(id);
+    }
     return publicProfile(user);
   }
 }

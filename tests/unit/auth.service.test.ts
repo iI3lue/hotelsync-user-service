@@ -44,6 +44,11 @@ describe("AuthService", () => {
         callback({
           user: { create: mockPrisma.user.create },
           roleAssignment: { create: mockPrisma.roleAssignment.create },
+          refreshSession: {
+            create: mockPrisma.refreshSession.create,
+            update: mockPrisma.refreshSession.update,
+            updateMany: mockPrisma.refreshSession.updateMany,
+          },
         })
     );
     mockPrisma.refreshSession.create.mockImplementation((args: any) => ({
@@ -151,13 +156,33 @@ describe("AuthService", () => {
         hotel_id: null,
       });
 
+      mockPrisma.refreshSession.updateMany.mockResolvedValue({ count: 1 });
+
       const result = await authService.refresh(oldToken);
 
       expect(result.refresh_token).not.toBe(oldToken);
-      expect(mockPrisma.refreshSession.update).toHaveBeenCalledWith({
-        where: { session_id: "old-session" },
+      expect(mockPrisma.refreshSession.updateMany).toHaveBeenCalledWith({
+        where: { session_id: "old-session", revoked_at: null },
         data: expect.objectContaining({ revoked_at: expect.any(Date) }),
       });
+    });
+
+    it("rejects a concurrent reuse of the same refresh token", async () => {
+      const oldToken = newRefreshToken();
+      mockPrisma.refreshSession.findUnique.mockResolvedValue({
+        session_id: "old-session",
+        user_id: USER_ID,
+        expires_at: new Date(Date.now() + 3600_000),
+        revoked_at: null,
+        user: user(),
+      });
+      mockPrisma.roleAssignment.findFirst.mockResolvedValue({
+        role: "GUEST",
+        hotel_id: null,
+      });
+      mockPrisma.refreshSession.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(authService.refresh(oldToken)).rejects.toThrow(AppError);
     });
 
     it("rejects an unknown refresh token", async () => {

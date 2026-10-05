@@ -45,6 +45,8 @@ export const logoutSchema = refreshSchema;
 export const federatedSchema = z.object({
   provider: z.literal("auth0"),
   id_token: z.string().min(1).max(8192),
+  // Obligatorio: liga el id_token al flujo OAuth iniciado por el front.
+  nonce: z.string().min(1).max(256),
 });
 
 export const updateMeSchema = z.object({

@@ -90,6 +90,7 @@ export class AuthService {
       access_token: signAccessToken({
         sub: user.user_id,
         email: user.email,
+        email_verified: user.email_verified,
         role: "GUEST",
         hotel_id: null,
       }),
@@ -121,6 +122,7 @@ export class AuthService {
       access_token: signAccessToken({
         sub: user.user_id,
         email: user.email,
+        email_verified: user.email_verified,
         role: assignment.role,
         hotel_id: assignment.hotel_id,
       }),
@@ -132,7 +134,12 @@ export class AuthService {
     };
   }
 
-  /** Rotacion: revoca el refresh usado y emite un par nuevo. */
+  /**
+   * Rotacion atomica: revoca el refresh usado y emite un par nuevo en una
+   * sola transaccion. La revocacion es condicional (`revoked_at: null`): si
+   * dos pedidos concurrentes usan el mismo refresh, solo uno gana y el otro
+   * recibe 401 en vez de una segunda sesion valida.
+   */
   async refresh(refreshToken: string) {
     const session = await prisma.refreshSession.findUnique({
       where: { token_hash: hashRefreshToken(refreshToken) },
@@ -151,16 +158,34 @@ export class AuthService {
       throw new AppError(403, "Account has no active role", "Forbidden");
     }
 
-    const created = await issueSession(session.user_id);
-    await prisma.refreshSession.update({
-      where: { session_id: session.session_id },
-      data: { revoked_at: new Date(), replaced_by: created.session.session_id },
+    const created = await prisma.$transaction(async (tx) => {
+      const revoked = await tx.refreshSession.updateMany({
+        where: { session_id: session.session_id, revoked_at: null },
+        data: { revoked_at: new Date() },
+      });
+      if (revoked.count === 0) {
+        throw new AppError(401, "Invalid refresh token", "Unauthorized");
+      }
+      const nextToken = newRefreshToken();
+      const next = await tx.refreshSession.create({
+        data: {
+          user_id: session.user_id,
+          token_hash: hashRefreshToken(nextToken),
+          expires_at: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000),
+        },
+      });
+      await tx.refreshSession.update({
+        where: { session_id: session.session_id },
+        data: { replaced_by: next.session_id },
+      });
+      return { refreshToken: nextToken };
     });
 
     return {
       access_token: signAccessToken({
         sub: session.user_id,
         email: session.user.email,
+        email_verified: session.user.email_verified,
         role: assignment.role,
         hotel_id: assignment.hotel_id,
       }),
@@ -179,7 +204,7 @@ export class AuthService {
    * devuelve 409 indicando entrar con contraseña.
    */
   async federated(data: FederatedInput) {
-    const claims = await verifyAuth0IdToken(data.id_token);
+    const claims = await verifyAuth0IdToken(data.id_token, data.nonce);
     if (!claims.email) {
       throw new AppError(
         400,
@@ -208,6 +233,7 @@ export class AuthService {
         access_token: signAccessToken({
           sub: identity.user_id,
           email: identity.user.email,
+          email_verified: identity.user.email_verified,
           role: assignment.role,
           hotel_id: assignment.hotel_id,
         }),
@@ -262,6 +288,7 @@ export class AuthService {
       access_token: signAccessToken({
         sub: user.user_id,
         email: user.email,
+        email_verified: user.email_verified,
         role: "GUEST",
         hotel_id: null,
       }),

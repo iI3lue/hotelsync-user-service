@@ -78,9 +78,10 @@ describe("AuthService.federated", () => {
     const result = await authService.federated({
       provider: "auth0",
       id_token: "valid-id-token",
+      nonce: "oauth-nonce",
     });
 
-    expect(mockVerify).toHaveBeenCalledWith("valid-id-token");
+    expect(mockVerify).toHaveBeenCalledWith("valid-id-token", "oauth-nonce");
     expect(mockPrisma.externalIdentity.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         provider: "auth0",
@@ -107,6 +108,7 @@ describe("AuthService.federated", () => {
     const result = await authService.federated({
       provider: "auth0",
       id_token: "valid-id-token",
+      nonce: "oauth-nonce",
     });
 
     expect(mockPrisma.user.create).not.toHaveBeenCalled();
@@ -118,7 +120,11 @@ describe("AuthService.federated", () => {
     mockPrisma.user.findUnique.mockResolvedValue({ user_id: USER_ID });
 
     await expect(
-      authService.federated({ provider: "auth0", id_token: "valid-id-token" })
+      authService.federated({
+        provider: "auth0",
+        id_token: "valid-id-token",
+        nonce: "oauth-nonce",
+      })
     ).rejects.toThrow(AppError);
     expect(mockPrisma.user.create).not.toHaveBeenCalled();
   });
@@ -127,7 +133,11 @@ describe("AuthService.federated", () => {
     mockVerify.mockResolvedValue({ sub: "google-oauth2|999" });
 
     await expect(
-      authService.federated({ provider: "auth0", id_token: "valid-id-token" })
+      authService.federated({
+        provider: "auth0",
+        id_token: "valid-id-token",
+        nonce: "oauth-nonce",
+      })
     ).rejects.toThrow(AppError);
   });
 });

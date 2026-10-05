@@ -9,14 +9,20 @@ import { AppError } from "../middleware/error-handler.js";
 export interface AccessClaims {
   sub: string;
   email: string;
+  email_verified: boolean;
   role: string;
   hotel_id: string | null;
   scope: "global" | "hotel";
+  iss: string;
+  aud: string;
   iat: number;
   exp: number;
 }
 
-export const ACCESS_TTL_SECONDS = 8 * 60 * 60;
+export const TOKEN_ISSUER = "hotelsync";
+export const TOKEN_AUDIENCE = "hotelsync-api";
+
+export const ACCESS_TTL_SECONDS = 15 * 60;
 export const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
@@ -39,6 +45,7 @@ function base64urlEncode(input: string): string {
 export function signAccessToken(input: {
   sub: string;
   email: string;
+  email_verified?: boolean;
   role: string;
   hotel_id: string | null;
 }): string {
@@ -48,9 +55,12 @@ export function signAccessToken(input: {
     JSON.stringify({
       sub: input.sub,
       email: input.email,
+      email_verified: input.email_verified ?? false,
       role: input.role,
       hotel_id: input.hotel_id,
       scope: input.hotel_id ? "hotel" : "global",
+      iss: TOKEN_ISSUER,
+      aud: TOKEN_AUDIENCE,
       iat: now,
       exp: now + ACCESS_TTL_SECONDS,
     })
@@ -67,6 +77,17 @@ export function verifyAccessToken(token: string): AccessClaims {
     throw new AppError(401, "Invalid token", "Unauthorized");
   }
   const [header, payload, signature] = parts;
+  let decodedHeader: { alg?: string };
+  try {
+    decodedHeader = JSON.parse(
+      Buffer.from(header, "base64url").toString("utf8")
+    );
+  } catch {
+    throw new AppError(401, "Invalid token", "Unauthorized");
+  }
+  if (decodedHeader.alg !== "HS256") {
+    throw new AppError(401, "Invalid token", "Unauthorized");
+  }
   const expected = createHmac("sha256", getSecret())
     .update(`${header}.${payload}`)
     .digest();
@@ -77,7 +98,13 @@ export function verifyAccessToken(token: string): AccessClaims {
   const claims = JSON.parse(
     Buffer.from(payload, "base64url").toString("utf8")
   ) as AccessClaims;
-  if (!claims.sub || !claims.exp || Date.now() / 1000 > claims.exp) {
+  if (
+    !claims.sub ||
+    !claims.exp ||
+    claims.iss !== TOKEN_ISSUER ||
+    claims.aud !== TOKEN_AUDIENCE ||
+    Date.now() / 1000 > claims.exp
+  ) {
     throw new AppError(401, "Token expired", "Unauthorized");
   }
   return claims;
