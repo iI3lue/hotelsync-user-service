@@ -32,6 +32,7 @@ function publicProfile(user: {
   email: string;
   name: string;
   phone: string | null;
+  picture_url: string | null;
   status: string;
   email_verified: boolean;
 }) {
@@ -40,6 +41,7 @@ function publicProfile(user: {
     email: user.email,
     name: user.name,
     phone: user.phone,
+    picture_url: user.picture_url,
     status: user.status,
     email_verified: user.email_verified,
   };

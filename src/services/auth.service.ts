@@ -25,6 +25,7 @@ function publicProfile(user: {
   email: string;
   name: string;
   phone: string | null;
+  picture_url: string | null;
   status: string;
   email_verified: boolean;
 }) {
@@ -33,6 +34,7 @@ function publicProfile(user: {
     email: user.email,
     name: user.name,
     phone: user.phone,
+    picture_url: user.picture_url,
     status: user.status,
     email_verified: user.email_verified,
   };
@@ -224,6 +226,23 @@ export class AuthService {
       if (identity.user.status !== "ACTIVE") {
         throw new AppError(403, `Account is ${identity.user.status}`, "Forbidden");
       }
+      // Sincroniza nombre y foto desde los claims verificados del IdP.
+      const syncedName = claims.name?.trim();
+      if (
+        (syncedName && syncedName !== identity.user.name) ||
+        (claims.picture !== undefined && claims.picture !== identity.user.picture_url)
+      ) {
+        await prisma.user.update({
+          where: { user_id: identity.user_id },
+          data: {
+            ...(syncedName ? { name: syncedName } : {}),
+            ...(claims.picture !== undefined ? { picture_url: claims.picture } : {}),
+          },
+        });
+        identity.user.name = syncedName || identity.user.name;
+        identity.user.picture_url =
+          claims.picture !== undefined ? claims.picture : identity.user.picture_url;
+      }
       const assignment = await activeAssignment(identity.user_id);
       if (!assignment) {
         throw new AppError(403, "Account has no active role", "Forbidden");
@@ -264,6 +283,7 @@ export class AuthService {
           // Sin contraseña utilizable: el esquema "federated$" nunca verifica.
           password_hash: `federated$${randomTempPassword()}`,
           name: claims.name?.trim() || claims.email as string,
+          picture_url: claims.picture,
           status: "ACTIVE",
           email_verified: claims.emailVerified ?? false,
         },
@@ -333,7 +353,8 @@ export class AuthService {
     }).catch(() => {
       throw new AppError(404, `User with id ${userId} not found`, "Not Found");
     });
-    return publicProfile(user);
+    const assignment = await activeAssignment(user.user_id);
+    return { user: publicProfile(user), assignment };
   }
 }
 

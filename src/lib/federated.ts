@@ -16,6 +16,7 @@ export interface FederatedClaims {
   email?: string;
   emailVerified?: boolean;
   name?: string;
+  picture?: string;
 }
 
 let jose: JoseModule | null = null;
@@ -63,6 +64,7 @@ export async function verifyAuth0IdToken(
       email: typeof payload.email === "string" ? payload.email : undefined,
       emailVerified: payload.email_verified === true,
       name: typeof payload.name === "string" ? payload.name : undefined,
+      picture: typeof payload.picture === "string" ? payload.picture : undefined,
     };
   } catch (err) {
     if (err instanceof AppError) throw err;
