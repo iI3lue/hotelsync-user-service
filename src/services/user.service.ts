@@ -223,11 +223,14 @@ export class UserService {
    * SUPER_ADMIN ve todo; MANAGER solo su hotel (el filtro se fuerza).
    */
   async listStaff(actor: AccessClaims, query: ListStaffQuery) {
-    const hotelId =
-      actor.role === "MANAGER" ? actor.hotel_id : query.hotel_id ?? undefined;
     if (!isSuperAdmin(actor) && actor.role !== "MANAGER") {
       throw new AppError(403, "Insufficient role", "Forbidden");
     }
+    if (actor.role === "MANAGER" && !actor.hotel_id) {
+      throw new AppError(403, "Manager has no hotel assigned", "Forbidden");
+    }
+    const hotelId =
+      actor.role === "MANAGER" ? actor.hotel_id : query.hotel_id ?? undefined;
 
     const users = await prisma.user.findMany({
       where: {
