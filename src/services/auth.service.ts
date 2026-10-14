@@ -351,6 +351,21 @@ export class AuthService {
   }
 
   /**
+   * Lectura interna servidor-a-servidor (loyalty-service, earn de puntos):
+   * devuelve el estado de la cuenta sin exponer el perfil. 404 si no existe.
+   */
+  async getInternalUser(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { user_id: userId },
+      select: { user_id: true, status: true },
+    });
+    if (!user) {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
+    return user;
+  }
+
+  /**
    * Baja de cuenta propia (variante A): bloquea si hay reservas activas.
    * Baja lógica + anonimización, nunca borrado físico: otros servicios
    * referencian `user_id` (reservas, folios, puntos) sin FK entre bases.

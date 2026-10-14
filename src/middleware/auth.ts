@@ -45,3 +45,22 @@ export function requireRole(...roles: string[]) {
 }
 
 export const requireSuperAdmin = requireRole("SUPER_ADMIN");
+
+/**
+ * Servidor-a-servidor (loyalty-service, earn de puntos): clave dedicada
+ * `x-loyalty-key`, sin JWT de usuario. Nunca se entrega al browser.
+ */
+export function requireLoyaltyKey(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void {
+  const secret = process.env.LOYALTY_SERVICE_KEY;
+  const value = req.headers["x-loyalty-key"];
+  const provided = Array.isArray(value) ? value[0] : value;
+  if (!secret || !provided || secret !== provided) {
+    next(new AppError(401, "Missing service credentials", "Unauthorized"));
+    return;
+  }
+  next();
+}

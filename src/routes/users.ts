@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { authController } from "../controllers/auth.controller.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireLoyaltyKey } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
-import { deleteMeSchema, updateMeSchema } from "../validators/auth.js";
+import {
+  deleteMeSchema,
+  updateMeSchema,
+  userIdParamSchema,
+} from "../validators/auth.js";
 
 const router = Router();
 
@@ -18,6 +22,13 @@ router.delete(
   requireAuth,
   validate(deleteMeSchema),
   authController.deleteMe.bind(authController)
+);
+// Interno servidor-a-servidor (loyalty-service, earn): sin JWT de usuario.
+router.get(
+  "/internal/:id",
+  requireLoyaltyKey,
+  validate(userIdParamSchema, "params"),
+  authController.getInternalUser.bind(authController)
 );
 
 export default router;

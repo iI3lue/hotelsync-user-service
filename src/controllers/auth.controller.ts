@@ -105,6 +105,16 @@ export class AuthController {
       next(err);
     }
   }
+
+  /** Lectura interna servidor-a-servidor (loyalty-service, earn de puntos). */
+  async getInternalUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.getInternalUser(req.params.id as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const authController = new AuthController();
