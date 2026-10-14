@@ -23,8 +23,27 @@ model User {
   assignments RoleAssignment[]
   sessions    RefreshSession[]
   identities  ExternalIdentity[]
+  resetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+/**
+ * Token de recuperación de contraseña (un solo uso, expira en 1h).
+ * Se guarda solo el hash SHA-256, nunca el valor que viaja en el link.
+ */
+model PasswordResetToken {
+  token_id   String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique @db.VarChar(64)
+  expires_at DateTime  @db.Timestamptz(6)
+  used_at    DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("password_reset_tokens")
 }
 
 model RoleAssignment {

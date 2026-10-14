@@ -14,11 +14,13 @@ import {
 } from "../lib/tokens.js";
 import { verifyAuth0IdToken } from "../lib/federated.js";
 import {
+  DeleteMeInput,
   FederatedInput,
   LoginInput,
   RegisterInput,
   UpdateMeInput,
 } from "../validators/auth.js";
+import { hasActiveBookings } from "../lib/booking-client.js";
 
 function publicProfile(user: {
   user_id: string;
@@ -339,11 +341,92 @@ export class AuthService {
     if (!user) {
       throw new AppError(404, `User with id ${userId} not found`, "Not Found");
     }
+    // Cuentas dadas de baja: el JWT viejo sigue firmando hasta que expira,
+    // pero la cuenta ya no existe a efectos practicos.
+    if (user.status !== "ACTIVE") {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
     const assignment = await activeAssignment(user.user_id);
     return { user: publicProfile(user), assignment };
   }
 
+  /**
+   * Baja de cuenta propia (variante A): bloquea si hay reservas activas.
+   * Baja lógica + anonimización, nunca borrado físico: otros servicios
+   * referencian `user_id` (reservas, folios, puntos) sin FK entre bases.
+   * El email anonimizado libera el unique y permite re-registrarse.
+   */
+  async deleteMe(userId: string, data: DeleteMeInput) {
+    const user = await prisma.user.findUnique({
+      where: { user_id: userId },
+    });
+    if (!user) {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
+    // Ya dada de baja: a efectos practicos no existe (reintento -> 404,
+    // no 400). Igual que getMe/updateMe.
+    if (
+      user.status !== "ACTIVE" ||
+      user.password_hash.startsWith("deleted$")
+    ) {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
+
+    const hasPassword =
+      !user.password_hash.startsWith("federated$") &&
+      !user.password_hash.startsWith("deleted$");
+    if (hasPassword) {
+      if (
+        !data.password ||
+        !(await verifyPassword(data.password, user.password_hash))
+      ) {
+        throw new AppError(401, "Invalid password", "Unauthorized");
+      }
+    } else if (data.confirm !== true) {
+      throw new AppError(400, "Confirmation required", "Bad Request");
+    }
+
+    if (await hasActiveBookings(userId)) {
+      throw new AppError(
+        409,
+        "Tenés reservas activas: cancelalas antes de eliminar tu cuenta",
+        "Conflict"
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { user_id: userId },
+        data: {
+          email: `deleted_${userId}@deleted.local`,
+          password_hash: `deleted$${randomTempPassword()}`,
+          name: "Cuenta eliminada",
+          phone: null,
+          picture_url: null,
+          status: "DISABLED",
+          email_verified: false,
+        },
+      });
+      await tx.refreshSession.updateMany({
+        where: { user_id: userId, revoked_at: null },
+        data: { revoked_at: new Date() },
+      });
+      await tx.passwordResetToken.updateMany({
+        where: { user_id: userId, used_at: null },
+        data: { used_at: new Date() },
+      });
+    });
+    return { ok: true };
+  }
+
   async updateMe(userId: string, data: UpdateMeInput) {
+    const current = await prisma.user.findUnique({
+      where: { user_id: userId },
+    });
+    // Igual que getMe: las cuentas dadas de baja ya no existen.
+    if (!current || current.status !== "ACTIVE") {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
     const user = await prisma.user.update({
       where: { user_id: userId },
       data: {

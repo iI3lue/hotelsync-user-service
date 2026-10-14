@@ -42,6 +42,27 @@ export const refreshSchema = z.object({
 
 export const logoutSchema = refreshSchema;
 
+export const forgotPasswordSchema = z.object({
+  email: emailSchema,
+});
+
+export const resetPasswordSchema = z.object({
+  // Link (64 hex) o código demo (6 dígitos).
+  token: z.string().min(6).max(256),
+  new_password: passwordSchema,
+});
+
+export const requestCodeSchema = z.object({
+  email: emailSchema,
+});
+
+export const deleteMeSchema = z.object({
+  // Cuentas con contraseña: se exige y verifica.
+  password: z.string().min(1).max(128).optional(),
+  // Cuentas federadas (sin contraseña): confirmación explícita.
+  confirm: z.literal(true).optional(),
+});
+
 export const federatedSchema = z.object({
   provider: z.literal("auth0"),
   id_token: z.string().min(1).max(8192),
@@ -101,6 +122,10 @@ export const setHotelStaffActiveSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type RequestCodeInput = z.infer<typeof requestCodeSchema>;
+export type DeleteMeInput = z.infer<typeof deleteMeSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type FederatedInput = z.infer<typeof federatedSchema>;
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { authService } from "../services/auth.service.js";
+import { passwordService } from "../services/password.service.js";
 import { AuthRequest } from "../middleware/auth.js";
 
 export class AuthController {
@@ -48,6 +49,33 @@ export class AuthController {
     }
   }
 
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await passwordService.requestReset(req.body);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await passwordService.resetPassword(req.body, req.ip);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async requestCode(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await passwordService.requestCode(req.body);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async me(req: Request, res: Response, next: NextFunction) {
     try {
       const auth = (req as AuthRequest).auth;
@@ -62,6 +90,16 @@ export class AuthController {
     try {
       const auth = (req as AuthRequest).auth;
       const result = await authService.updateMe(auth?.sub as string, req.body);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteMe(req: Request, res: Response, next: NextFunction) {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const result = await authService.deleteMe(auth?.sub as string, req.body);
       res.json(result);
     } catch (err) {
       next(err);
