@@ -1,6 +1,6 @@
 # HotelSync — User Service
 
-Microservicio de identidad y personal de HotelSync: registro, login local, login federado con Google vía Auth0, sesiones con refresh tokens, recuperación de contraseña y gestión de staff por hotel.
+Microservicio de identidad y personal de HotelSync: registro, login local, login federado con Google vía Auth0, sesiones con refresh tokens, recuperación de contraseña, consentimiento de tratamiento de datos (Ley 1581) y gestión de staff por hotel.
 
 - **Producción:** https://hotelsync-user-service.onrender.com
 - **Puerto local:** 3003
@@ -28,7 +28,7 @@ Node.js ≥20 · TypeScript · Express · Prisma · PostgreSQL 16 · Zod · `jso
 | Método | Ruta | Auth | Descripción |
 | --- | --- | --- | --- |
 | GET | `/health` | — | Estado del servicio |
-| POST | `/v1/auth/register` | — | Registro de huésped |
+| POST | `/v1/auth/register` | — | Registro de huésped (exige `terms_accepted: true`) |
 | POST | `/v1/auth/login` | — | Login local (email + contraseña) |
 | POST | `/v1/auth/federated` | — | Login con `id_token` de Auth0/Google |
 | POST | `/v1/auth/refresh` | Refresh token | Renueva access token |
@@ -38,6 +38,7 @@ Node.js ≥20 · TypeScript · Express · Prisma · PostgreSQL 16 · Zod · `jso
 | POST | `/v1/auth/password/reset` | Código | Cambia la contraseña |
 | GET | `/v1/users/me` | JWT | Perfil propio |
 | PATCH | `/v1/users/me` | JWT | Actualiza perfil |
+| POST | `/v1/users/me/consent` | JWT | Acepta el tratamiento de datos (una vez, idempotente) |
 | DELETE | `/v1/users/me` | JWT | Baja de cuenta (falla si hay reservas activas) |
 | GET | `/v1/users/internal/:id` | `x-loyalty-key` | Datos mínimos para loyalty-service |
 | POST | `/v1/admin/users` | JWT + SUPER_ADMIN | Crea staff global |
@@ -54,7 +55,7 @@ Node.js ≥20 · TypeScript · Express · Prisma · PostgreSQL 16 · Zod · `jso
 
 Tablas: `User`, `PasswordResetToken`, `RoleAssignment`, `ExternalIdentity`, `RefreshSession`.
 
-Migraciones en `prisma/migrations` (4). El seed crea un `SUPER_ADMIN` **solo** si existen `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD`; si no, no inserta nada.
+Migraciones en `prisma/migrations` (5). El seed crea un `SUPER_ADMIN` **solo** si existen `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD`; si no, no inserta nada. El consentimiento de datos se guarda en `User.terms_accepted_at`.
 
 ## Comunicación
 
@@ -74,6 +75,7 @@ Migraciones en `prisma/migrations` (4). El seed crea un `SUPER_ADMIN` **solo** s
 | `AUTH0_CLIENT_ID` | Para login Google | Audiencia del `id_token` |
 | `PASSWORD_RESET_BASE_URL` | No | Enlace enviado en la recuperación |
 | `MAILER_PROVIDER` | No | `log` (default, imprime en consola) o `smtp` |
+| `PASSWORD_RESET_DEMO_CODE` | No | Solo con `MAILER_PROVIDER=log`: `true` expone el código y el enlace de reset (demo, apagado por defecto) |
 | `BOOKING_SERVICE_URL` | Sí | Base de booking-service |
 | `BOOKING_SERVICE_KEY` | Sí | Clave interna `x-user-key` |
 | `LOYALTY_SERVICE_KEY` | Sí | Clave que valida `/users/internal/:id` |
@@ -81,6 +83,8 @@ Migraciones en `prisma/migrations` (4). El seed crea un `SUPER_ADMIN` **solo** s
 | `BOOTSTRAP_ADMIN_PASSWORD` | No | Solo seed |
 
 Copiar `.env.example` a `.env` y completar los valores.
+
+El código de recuperación solo se expone en la respuesta de `/v1/auth/password/code` cuando `MAILER_PROVIDER=log` **y** `PASSWORD_RESET_DEMO_CODE=true`; con `smtp` o sin el opt-in el código viaja por email y nunca sale en la respuesta.
 
 ## Ejecución local
 
