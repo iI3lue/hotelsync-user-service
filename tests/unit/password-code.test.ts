@@ -37,11 +37,13 @@ describe("PasswordService demo code", () => {
     prtUpdateMany: jest.Mock;
   };
   const prevMailer = process.env.MAILER_PROVIDER;
+  const prevDemoFlag = process.env.PASSWORD_RESET_DEMO_CODE;
 
   beforeEach(() => {
     jest.clearAllMocks();
     clearRateLimits();
     delete process.env.MAILER_PROVIDER;
+    delete process.env.PASSWORD_RESET_DEMO_CODE;
     txMocks = { prtCreate: jest.fn(), prtUpdateMany: jest.fn() };
     mockPrisma.$transaction.mockImplementation((callback: any) =>
       callback({
@@ -56,6 +58,8 @@ describe("PasswordService demo code", () => {
   afterEach(() => {
     if (prevMailer === undefined) delete process.env.MAILER_PROVIDER;
     else process.env.MAILER_PROVIDER = prevMailer;
+    if (prevDemoFlag === undefined) delete process.env.PASSWORD_RESET_DEMO_CODE;
+    else process.env.PASSWORD_RESET_DEMO_CODE = prevDemoFlag;
   });
 
   describe("requestCode", () => {
@@ -79,7 +83,8 @@ describe("PasswordService demo code", () => {
       expect(txMocks.prtCreate).not.toHaveBeenCalled();
     });
 
-    it("emits a 6-digit code with 10-minute expiry in log mode", async () => {
+    it("emits a 6-digit code with 10-minute expiry when the demo flag is on", async () => {
+      process.env.PASSWORD_RESET_DEMO_CODE = "true";
       mockPrisma.user.findUnique.mockResolvedValue(user());
       const before = Date.now();
 
@@ -106,8 +111,28 @@ describe("PasswordService demo code", () => {
       expect(expiresAt.getTime()).toBeLessThanOrEqual(before + 11 * 60_000);
     });
 
+    it("omits the code in log mode without the demo flag (default)", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(user());
+
+      await expect(
+        passwordService.requestCode({ email: "ana@example.com" })
+      ).resolves.toEqual({ ok: true });
+      expect(txMocks.prtCreate).toHaveBeenCalled();
+    });
+
     it("omits the code when the mailer is smtp", async () => {
       process.env.MAILER_PROVIDER = "smtp";
+      mockPrisma.user.findUnique.mockResolvedValue(user());
+
+      await expect(
+        passwordService.requestCode({ email: "ana@example.com" })
+      ).resolves.toEqual({ ok: true });
+      expect(txMocks.prtCreate).toHaveBeenCalled();
+    });
+
+    it("omits the code when the demo flag is on but the mailer is smtp", async () => {
+      process.env.MAILER_PROVIDER = "smtp";
+      process.env.PASSWORD_RESET_DEMO_CODE = "true";
       mockPrisma.user.findUnique.mockResolvedValue(user());
 
       await expect(

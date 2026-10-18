@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import prisma from "../lib/prisma.js";
 import { AppError } from "../middleware/error-handler.js";
 import { hashPassword } from "../lib/password.js";
-import { isLogMailer, sendPasswordResetEmail } from "../lib/mailer.js";
+import { isDemoResetExposed, sendPasswordResetEmail } from "../lib/mailer.js";
 import { checkRateLimit } from "../lib/rate-limit.js";
 import {
   ForgotPasswordInput,
@@ -138,7 +138,7 @@ export class PasswordService {
         CODE_TTL_MS / 60000
       } min)`
     );
-    if (!isLogMailer()) return { ok: true };
+    if (!isDemoResetExposed()) return { ok: true };
     return { ok: true, demo_code: code };
   }
 
