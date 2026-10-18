@@ -29,6 +29,12 @@ export const registerSchema = z.object({
   password: passwordSchema,
   name: z.string().trim().min(1).max(255),
   phone: z.string().trim().min(1).max(50).optional(),
+  // Obligatorio: el registro no procede sin aceptar el tratamiento de datos.
+  terms_accepted: z.literal(true),
+});
+
+export const consentSchema = z.object({
+  accepted: z.literal(true),
 });
 
 export const loginSchema = z.object({
@@ -121,6 +127,7 @@ export const setHotelStaffActiveSchema = z.object({
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
+export type ConsentInput = z.infer<typeof consentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

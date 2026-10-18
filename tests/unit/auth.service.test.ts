@@ -32,6 +32,7 @@ function user(overrides = {}) {
     phone: null,
     status: "ACTIVE",
     email_verified: false,
+    terms_accepted_at: null,
     ...overrides,
   };
 }
@@ -72,13 +73,17 @@ describe("AuthService", () => {
         email: "ana@example.com",
         password: "Secret123!",
         name: "Ana",
+        terms_accepted: true,
       });
 
       expect(result.user.email).toBe("ana@example.com");
       expect(result.access_token.split(".")).toHaveLength(3);
       expect(result.refresh_token).toHaveLength(64);
       expect(mockPrisma.user.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ status: "ACTIVE" }),
+        data: expect.objectContaining({
+          status: "ACTIVE",
+          terms_accepted_at: expect.any(Date),
+        }),
       });
       expect(mockPrisma.roleAssignment.create).toHaveBeenCalledWith({
         data: { user_id: USER_ID, role: "GUEST", hotel_id: null },
@@ -93,8 +98,53 @@ describe("AuthService", () => {
           email: "ana@example.com",
           password: "Secret123!",
           name: "Ana",
+          terms_accepted: true,
         })
       ).rejects.toThrow(AppError);
+    });
+  });
+
+  describe("acceptConsent", () => {
+    it("stamps terms_accepted_at on first acceptance", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(user());
+      const stamped = new Date("2026-10-18T12:00:00.000Z");
+      mockPrisma.user.update.mockResolvedValue(
+        user({ terms_accepted_at: stamped })
+      );
+
+      const result = await authService.acceptConsent(USER_ID);
+
+      expect(result.terms_accepted_at).toEqual(stamped);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { user_id: USER_ID },
+        data: { terms_accepted_at: expect.any(Date) },
+      });
+    });
+
+    it("keeps the first acceptance (idempotent)", async () => {
+      const first = new Date("2026-01-01T00:00:00.000Z");
+      mockPrisma.user.findUnique.mockResolvedValue(
+        user({ terms_accepted_at: first })
+      );
+
+      const result = await authService.acceptConsent(USER_ID);
+
+      expect(result.terms_accepted_at).toEqual(first);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects unknown or disabled accounts", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      await expect(authService.acceptConsent(USER_ID)).rejects.toThrow(
+        AppError
+      );
+
+      mockPrisma.user.findUnique.mockResolvedValue(
+        user({ status: "DISABLED" })
+      );
+      await expect(authService.acceptConsent(USER_ID)).rejects.toThrow(
+        AppError
+      );
     });
   });
 

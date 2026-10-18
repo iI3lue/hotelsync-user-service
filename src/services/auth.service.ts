@@ -30,6 +30,7 @@ function publicProfile(user: {
   picture_url: string | null;
   status: string;
   email_verified: boolean;
+  terms_accepted_at: Date | null;
 }) {
   return {
     user_id: user.user_id,
@@ -39,6 +40,7 @@ function publicProfile(user: {
     picture_url: user.picture_url,
     status: user.status,
     email_verified: user.email_verified,
+    terms_accepted_at: user.terms_accepted_at,
   };
 }
 
@@ -80,6 +82,7 @@ export class AuthService {
           name: data.name,
           phone: data.phone,
           status: "ACTIVE",
+          terms_accepted_at: new Date(),
         },
       });
       await tx.roleAssignment.create({
@@ -453,6 +456,27 @@ export class AuthService {
     });
     const assignment = await activeAssignment(user.user_id);
     return { user: publicProfile(user), assignment };
+  }
+
+  /**
+   * Registra la aceptación del tratamiento de datos. Idempotente: si ya
+   * había aceptado, conserva el primer timestamp.
+   */
+  async acceptConsent(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { user_id: userId },
+    });
+    if (!user || user.status !== "ACTIVE") {
+      throw new AppError(404, `User with id ${userId} not found`, "Not Found");
+    }
+    if (user.terms_accepted_at) {
+      return { terms_accepted_at: user.terms_accepted_at };
+    }
+    const updated = await prisma.user.update({
+      where: { user_id: userId },
+      data: { terms_accepted_at: new Date() },
+    });
+    return { terms_accepted_at: updated.terms_accepted_at };
   }
 }
 

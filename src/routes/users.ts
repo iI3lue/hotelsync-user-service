@@ -3,6 +3,7 @@ import { authController } from "../controllers/auth.controller.js";
 import { requireAuth, requireLoyaltyKey } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 import {
+  consentSchema,
   deleteMeSchema,
   updateMeSchema,
   userIdParamSchema,
@@ -16,6 +17,13 @@ router.patch(
   requireAuth,
   validate(updateMeSchema),
   authController.updateMe.bind(authController)
+);
+// Aceptación del tratamiento de datos (una sola vez, idempotente).
+router.post(
+  "/me/consent",
+  requireAuth,
+  validate(consentSchema),
+  authController.acceptConsent.bind(authController)
 );
 router.delete(
   "/me",

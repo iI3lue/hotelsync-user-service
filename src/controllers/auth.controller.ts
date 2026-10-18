@@ -106,6 +106,16 @@ export class AuthController {
     }
   }
 
+  async acceptConsent(req: Request, res: Response, next: NextFunction) {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const result = await authService.acceptConsent(auth?.sub as string);
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   /** Lectura interna servidor-a-servidor (loyalty-service, earn de puntos). */
   async getInternalUser(req: Request, res: Response, next: NextFunction) {
     try {
