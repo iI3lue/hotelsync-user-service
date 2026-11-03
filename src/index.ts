@@ -1,4 +1,5 @@
 import express from "express";
+import { requireGateway } from "./middleware/gateway.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
@@ -7,6 +8,8 @@ import staffRouter from "./routes/staff.js";
 
 const app = express();
 const PORT = process.env.PORT || 3003;
+
+app.use(requireGateway);
 
 app.use(express.json());
 

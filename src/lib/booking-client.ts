@@ -1,3 +1,4 @@
+import { gatewayHeaders } from "../middleware/gateway.js";
 import { AppError } from "../middleware/error-handler.js";
 
 const BOOKING_SERVICE_URL =
@@ -15,9 +16,10 @@ export async function hasActiveBookings(userId: string): Promise<boolean> {
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: BOOKING_SERVICE_KEY
-        ? { "x-user-key": BOOKING_SERVICE_KEY }
-        : {},
+      headers: {
+        ...gatewayHeaders(),
+        ...(BOOKING_SERVICE_KEY ? { "x-user-key": BOOKING_SERVICE_KEY } : {}),
+      },
     });
   } catch {
     throw new AppError(503, "Booking service unavailable", "Bad Gateway");
